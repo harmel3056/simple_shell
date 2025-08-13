@@ -7,6 +7,7 @@
 #define MAX_ARGS 64 		//Limits array args to 63 + 1 NULL for execve()
 
 int launch_exec_child(char *argv[]);
+extern char **environ;
 
 /**
  */
@@ -22,15 +23,29 @@ int main(void)
 	printf("cisfun$ ");
 	getline(&line, &len, stdin);	//line now points to buffer containing line read from stdin, len holds malloc'd buffer size
 
+	if (getline(&line, &len, stdin) == 1)	//getline error handling
+	{
+		perror("getline failure");
+		free(line);
+		return (1);
+	}
+
 	line[strcspn(line, "\n")] = '\0';	//replaces '\n' with '\0' to remove newline appld by getline
 
-	token = strtok(line, ",");	//initialises tokenising with strtok
+	token = strtok(line, " ");	//initialises tokenising with strtok
+
+	if (token == NULL)		//strtok error handling
+	{
+		fprintf(stderr, "No command entered\n");
+		free(line);
+		return (1);
+	}
 
 	while (token != NULL && i < MAX_ARGS - 1)	//token/pointer is valid & args within limit
 	{
 		argv[i] = token;		//assigns delimited arg to array[i]
 		i++;				//increments array index
-		token = strtok(NULL, ",");	//tokenise following segments of string, NULL to continue same string, strtok remembers where you're up to
+		token = strtok(NULL, " ");	//tokenise following segments of string, NULL to continue same string, strtok remembers where you're up to
 	}
 	argv[i] = NULL;			//NULL tells execve the array is complete, is a terminator
 
@@ -52,12 +67,15 @@ int launch_exec_child(char *argv[])
 {
 	pid_t pid;
 	int status;
-	extern char **environ;
 
 	pid = fork();		//Duplicates current process into 2, parent and child
 
 	if (pid == 0)		//Child process
-		execve(argv[0], argv, environ);	//takes argv array from strtok array
+		if (execve(argv[0], argv, environ) == -1)	//only runs the error if execve fails
+		{
+			perror("execve failure");	//Error handling
+			exit(EXIT_FAILURE);		//Child must exit is execve fails
+		}		
 
 	else if (pid > 0)	//Parent process
 		wait(&status);	//Waits for child to finish
